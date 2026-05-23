@@ -1,38 +1,26 @@
-- name: Setup SSH
-  env:
-    DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-    DEPLOY_PASSPHRASE: ${{ secrets.DEPLOY_PASSPHRASE }}
-  run: |
-    mkdir -p ~/.ssh
+name: Deploy
 
-    echo "$DEPLOY_KEY" > ~/.ssh/id_deploy
-    chmod 600 ~/.ssh/id_deploy
+on:
+  push:
+    branches:
+      - main
 
-    eval "$(ssh-agent -s)"
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-    cat > ~/.ssh/askpass.sh << 'EOF'
-    #!/bin/sh
-    echo "$DEPLOY_PASSPHRASE"
-    EOF
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    chmod +x ~/.ssh/askpass.sh
-
-    export SSH_ASKPASS=~/.ssh/askpass.sh
-    export DISPLAY=:0
-
-    setsid ssh-add ~/.ssh/id_deploy < /dev/null
-
-- name: Add known_hosts
-  env:
-    DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
-  run: |
-    ssh-keyscan -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
-
-- name: Deploy
-  env:
-    DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-    DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
-  run: |
-    rsync -avz --delete \
-      -e "ssh -o StrictHostKeyChecking=yes" \
-      ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
+    - name: Copy files
+      env:
+        DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+        rsync -avz --delete ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
