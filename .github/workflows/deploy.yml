@@ -1,45 +1,38 @@
-name: Deploy
+- name: Setup SSH
+  env:
+    DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+    DEPLOY_PASSPHRASE: ${{ secrets.DEPLOY_PASSPHRASE }}
+  run: |
+    mkdir -p ~/.ssh
 
-on:
-  push:
-    branches:
-      - main
+    echo "$DEPLOY_KEY" > ~/.ssh/id_deploy
+    chmod 600 ~/.ssh/id_deploy
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+    eval "$(ssh-agent -s)"
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    cat > ~/.ssh/askpass.sh << 'EOF'
+    #!/bin/sh
+    echo "$DEPLOY_PASSPHRASE"
+    EOF
 
-      - name: Start ssh-agent and load key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DEPLOY_KEY }}
-          ssh-passphrase: ${{ secrets.DEPLOY_PASSPHRASE }}
+    chmod +x ~/.ssh/askpass.sh
 
-      - name: Add host to known_hosts
-        env:
-          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+    export SSH_ASKPASS=~/.ssh/askpass.sh
+    export DISPLAY=:0
 
-      - name: Test SSH
-        env:
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
-        run: |
-          ssh -o StrictHostKeyChecking=yes \
-            $DEPLOY_USER@$DEPLOY_ADDRESS \
-            "echo connected"
+    setsid ssh-add ~/.ssh/id_deploy < /dev/null
 
-      - name: Deploy files
-        env:
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
-        run: |
-          rsync -avz --delete \
-            -e "ssh -o StrictHostKeyChecking=yes" \
-            ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
+- name: Add known_hosts
+  env:
+    DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+  run: |
+    ssh-keyscan -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+
+- name: Deploy
+  env:
+    DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+    DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+  run: |
+    rsync -avz --delete \
+      -e "ssh -o StrictHostKeyChecking=yes" \
+      ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
