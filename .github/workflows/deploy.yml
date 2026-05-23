@@ -115,13 +115,13 @@ jobs:
               npm run build
           EOF
 
-  run-frontend:
-    name: Run Frontend
+  configure-nginx:
+    name: Configure Nginx
     needs: build-frontend
     runs-on: ubuntu-latest
 
     steps:
-      - name: Restart frontend server
+      - name: Configure nginx reverse proxy
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -134,13 +134,34 @@ jobs:
 
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
 
-          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" \
+          ssh -t -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" \
             $DEPLOY_USER@$DEPLOY_ADDRESS << 'EOF'
-              cd /var/www/html/frontend
 
-              pkill -f "node.*frontend" || true
+              sudo tee /etc/nginx/sites-available/default > /dev/null << 'NGINXCONF'
+              server {
+                  listen 80;
+                  server_name _;
 
-              nohup npm start > frontend.log 2>&1 &
+                  root /var/www/html/frontend/dist;
+                  index index.html;
 
-              disown || true
-          EOF
+                  location / {
+                      try_files \$uri \$uri/ /index.html;
+                  }
+
+                  location /api/ {
+                      proxy_pass http://127.0.0.1:2222/;
+
+                      proxy_http_version 1.1;
+
+                      proxy_set_header Host \$host;
+                      proxy_set_header X-Real-IP \$remote_addr;
+                      proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                      proxy_set_header X-Forwarded-Proto \$scheme;
+                  }
+              }
+              NGINXCONF
+
+                            sudo nginx -t
+                            sudo systemctl restart nginx
+                        EOF
