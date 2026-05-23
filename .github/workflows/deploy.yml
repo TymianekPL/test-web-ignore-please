@@ -10,18 +10,137 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Copy files
-      env:
-        DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-        DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-        DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
-        DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-      run: |
-        mkdir -p ~/.ssh
-        echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-        ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
-        rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -p $DEPLOY_PORT" ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
+      - name: Copy files
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/id_ed25519 -p $DEPLOY_PORT" \
+            ./ \
+            $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
+
+  build-backend:
+    name: Build Backend
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build backend
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" \
+            $DEPLOY_USER@$DEPLOY_ADDRESS << 'EOF'
+              cd /var/www/html/backend
+
+              npm install
+              npm run build
+          EOF
+
+  run-backend:
+    name: Run Backend
+    needs: build-backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restart backend server
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" \
+            $DEPLOY_USER@$DEPLOY_ADDRESS << 'EOF'
+              cd /var/www/html/backend
+
+              pkill -f "node.*backend" || true
+
+              nohup npm start > backend.log 2>&1 &
+
+              disown || true
+          EOF
+
+  build-frontend:
+    name: Build Frontend
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build frontend
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" \
+            $DEPLOY_USER@$DEPLOY_ADDRESS << 'EOF'
+              cd /var/www/html/frontend
+
+              npm install
+              npm run build
+          EOF
+
+  run-frontend:
+    name: Run Frontend
+    needs: build-frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restart frontend server
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/id_ed25519 -p "$DEPLOY_PORT" \
+            $DEPLOY_USER@$DEPLOY_ADDRESS << 'EOF'
+              cd /var/www/html/frontend
+
+              pkill -f "node.*frontend" || true
+
+              nohup npm start > frontend.log 2>&1 &
+
+              disown || true
+          EOF
