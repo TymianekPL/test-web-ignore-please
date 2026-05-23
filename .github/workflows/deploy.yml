@@ -1,0 +1,24 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Copy files to VPS
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_KEY }}
+      run: |
+        mkdir -p ~/.ssh
+        echo "$DEPLOY_KEY" > ~/.ssh/id_fluff
+        chmod 600 ~/.ssh/id_fluff
+        ssh-keyscan -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+        rsync -avz --delete ./ $DEPLOY_USER@$DEPLOY_IP:/var/www/html/
