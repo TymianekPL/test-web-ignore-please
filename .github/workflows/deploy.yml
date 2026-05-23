@@ -18,9 +18,10 @@ jobs:
         DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         DEPLOY_ADDRESS: ${{ secrets.DEPLOY_ADDRESS }}
+        DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       run: |
         mkdir -p ~/.ssh
         echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519
         chmod 600 ~/.ssh/id_ed25519
-        ssh-keyscan -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
-        rsync -avz --delete ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/
+        ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_ADDRESS" >> ~/.ssh/known_hosts
+        rsync -avz --delete ./ $DEPLOY_USER@$DEPLOY_ADDRESS:/var/www/html/  -p $DEPLOY_PORT"
